@@ -1,0 +1,9 @@
+NOTAS IMPORTANTES PARA EL USO DE LA CARPETA geo_germany.
+
+1. Crear una carpeta con el nombre geo_germany.
+
+2. Usar el siguiente link: https://ratopi.github.io/opengeodb/PLZ.tab , y una vez que se descargue el archivo (automáticamente) se le cambia el nombre a plz_de.txt y se guarda en geo_germany.
+
+3. Usar el siguiente link: https://gadm.org/download_country.html, se busca el país de Alemania y se descarga el "Shapefile". Guardar los archivos descomprimidos en geo_germany.
+
+4. Seguir las instrucciones escritas en el archivo Markdown o PDF según sea el caso.
