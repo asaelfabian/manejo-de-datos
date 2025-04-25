@@ -1,0 +1,503 @@
+---
+title: "Network analysis"
+author: "karina serrano"
+date: "2025-04-17"
+output: pdf_document
+editor_options: 
+  markdown: 
+    wrap: 72
+    output:
+  pdf_document:
+    latex_engine: xelatex
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(igraph)
+library(ggraph)
+library(ggplot2)
+library(tidyverse)
+library(ggvenn)
+```
+
+
+# Capítulo 8: Network Analysis
+
+#  Introducción
+Los datos de red se generan cuando consideramos relaciones entre dos o más entidades en los datos, como las carreteras que conectan ciudades, las amistades entre personas o sus llamadas telefónicas. En los últimos años, se están generando y analizando una enorme cantidad de datos de redes en distintos campos.
+
+**Por ejemplo:**
+
+- En sociología se analizan redes de blogs basadas en sus citas para observar divisiones estructurales entre orientaciones políticas.
+
+- En epidemiología, se crean redes de transmisión de enfermedades para identificar las mejores formas de prevenir infecciones.
+
+- En tecnología se analizan redes de computadoras o redes eléctricas para optimizar su funcionamiento.
+
+- En el ámbito académico se estudian redes de coautorías y de citas para entender las colaboraciones entre universidades.
+
+Estructurar datos como redes facilita su análisis para distintos objetivos, como descubrir debilidades en una estructura (por ejemplo, en una comunidad vegetal frente a enfermedades), o explotar eficiencias de transmisión (como en el caso de una estrategia de publicidad).
+
+Este capítulo aborda cómo analizar redes y extraer las características clave de su estructura. Introduce conceptos como:
+
+- Componentes conectados
+
+- Medidas de centralidad
+
+- Redes ego (ego-networks)
+
+- PageRank
+
+Se utilizan herramientas de Python, pero el análisis también se puede adaptar fácilmente a R, como en este informe. Se estudian datos reales de una red de amistades en Facebook, planteando preguntas como:
+
+_ ¿Qué tipo de red es?
+
+- ¿Quién es el miembro más conectado o influyente?
+
+- ¿Quién tiene mayor cercanía al resto?
+
+- ¿Qué nodos son más accesibles desde el resto de la red?
+
+- ¿Existen comunidades y cuáles son las más densas?
+
+- ¿Hay superposición entre comunidades?
+
+# Definiciones básicas en gráficos
+
+Un grafo es una representación matemática de una red, compuesta por nodos y bordes que establecen conexiones entre ellos. Dependiendo de la naturaleza de los bordes, los grafos pueden ser dirigidos (con conexiones unidireccionales) o no dirigidos (con relaciones simétricas).
+
+Conceptos adicionales en el análisis de grafos: Ruta en una red: Una secuencia de nodos conectados por bordes. Es esencial para analizar la conectividad y estructura de un grafo.
+
+Camino más corto: Se refiere al trayecto con la menor cantidad de aristas entre dos nodos o aquel que minimiza la suma de los pesos asignados a los bordes en un grafo ponderado.
+
+Grafos conectados: Un grafo es conexo si existe al menos un camino entre cada par de nodos. Si cada nodo está conectado directamente con todos los demás nodos, se considera un grafo completo.
+
+Componentes conectados: Subconjuntos de nodos dentro de un grafo en los que todos los miembros están conectados entre sí.
+
+Subgrafos: Son porciones de un grafo que incluyen solo un subconjunto de nodos y las aristas que los enlazan.
+
+Estos conceptos son fundamentales para estudiar redes en diversas disciplinas, como sociología, biología, informática y logística. Permiten modelar, analizar y optimizar sistemas de comunicación, transporte y organización.
+
+# Análisis de Redes Sociales
+
+El análisis de redes sociales examina datos organizados en grafos para identificar sus propiedades y estructura. Este estudio permite describir características clave como la distribución de grados y la longitud media de trayectos, lo que ayuda a determinar el tipo de red.
+
+Existen dos tipos de redes destacadas:
+
+Red de mundo pequeño: Se caracteriza por una alta conectividad global con pocos pasos entre nodos, aunque la mayoría de los nodos no sean vecinos directos. Este fenómeno refleja cómo los conocidos pueden estar conectados a través de pequeñas cadenas de relaciones. Las comunidades en estas redes pueden verse como grafos completos, y ciertos individuos altamente conectados (como celebridades) desempeñan un papel central en mantener la cohesión.
+
+Red sin escala: En estas redes, la distribución de conexiones sigue una ley de potencia, donde la mayoría de los nodos tienen pocas conexiones, mientras que un pequeño número de nodos posee muchas conexiones. Este patrón es típico en redes como la World Wide Web y plataformas sociales, donde algunos nodos (páginas web o usuarios) acumulan una cantidad significativa de enlaces o interacciones.
+
+El estudio de estas redes permite comprender mejor sus patrones de comportamiento y su impacto en áreas como sociología, tecnología y comunicaciones.
+
+# Conceptos básicos en NetworkX
+
+igraph es una caja de herramientas de R para la creación, manipulación y análisis de redes complejas. Permite estudiar la estructura, dinámica y funciones de los grafos de manera eficiente.
+
+Después de importar la biblioteca, podemos crear un grafo no dirigido con 5 nodos y agregar sus aristas con el siguiente código:
+
+```{r}
+
+
+library(igraph)
+
+# Crear el grafo directamente con las aristas (los nodos se infieren automáticamente)
+g <- graph_from_edgelist(matrix(c(
+  "A", "B",
+  "A", "C",
+  "B", "D",
+  "B", "E",
+  "D", "E"
+), byrow = TRUE, ncol = 2), directed = FALSE)
+
+# Dibujar la red
+plot(g,
+     vertex.label = V(g)$name,
+     vertex.color = "skyblue",
+     vertex.size = 30,
+     edge.color = "gray40",
+     edge.width = 2,
+     layout = layout_with_fr)
+
+
+```
+# Caso práctico: Conjunto de datos de Facebook
+
+Para nuestro caso práctico, consideramos los datos de la red Facebook. En particular, utilizamos los datos de Círculos sociales: Facebook, provenientes de la colección Stanford Large Network Dataset (SNAP), que reúne diversas redes sociales, como Facebook, redes de citas, Twitter y comunidades abiertas como LiveJournal.
+
+El conjunto de datos de Facebook representa la amistad entre usuarios, donde los identificadores han sido anonimizados. La red se define como un grafo no dirigido y no ponderado, en el que los usuarios son los nodos y sus relaciones de amistad los bordes.
+
+El conjunto de datos está en un archivo de texto que contiene una lista de bordes, con un borde por línea. Ahora, en R, podemos cargar la red de Facebook y extraer información básica del gráfico, como el número de nodos, aristas y el grado promedio, con el siguiente código:
+
+
+#  Carga y estructura inicial del grafo
+
+Este informe analiza la estructura de una red social utilizando el conjunto de datos `facebook_combined.txt`, proveniente del Stanford SNAP dataset. Aplicamos técnicas de análisis de redes sobre un grafo no dirigido para estudiar propiedades como componentes conectados, medidas de centralidad, detección de comunidades y redes de ego.
+
+```{r}
+fb <- read_graph("C:/Users/Serra/OneDrive/Escritorio/proyecto progra/facebook_combined.txt", format = "edgelist", directed = FALSE)
+cat("Nodos:", vcount(fb), "\n")
+cat("Aristas:", ecount(fb), "\n")
+cat("Grado promedio:", mean(degree(fb)), "\n")
+```
+
+# Componentes conectados
+
+En este dataset, el grafo es conectado (todos los nodos están en una única componente gigante).
+
+```{r}
+components_fb <- components(fb)
+cat("Componentes conectados:", components_fb$no, "\n")
+```
+
+# Distribución de centralidades (grado, intermediación, cercanía, PageRank)
+
+Se calculan diversas centralidades para entender la importancia estructural de los nodos:
+
+Grado: número de conexiones.
+
+Intermediación: frecuencia con la que un nodo aparece en los caminos más cortos.
+
+Cercanía: medida inversa de la distancia media a todos los demás nodos.
+
+PageRank: importancia de un nodo basada en la importancia de sus vecinos.
+
+
+```{r}
+df_centralidades <- tibble(
+  grado = degree(fb, normalized = TRUE),
+  intermediacion = betweenness(fb, normalized = TRUE),
+  cercania = closeness(fb, normalized = TRUE),
+  pagerank = page_rank(fb)$vector
+)
+df_long <- pivot_longer(df_centralidades, cols = everything(), names_to = "tipo", values_to = "valor")
+
+ggplot(df_long, aes(x = valor)) +
+  geom_histogram(bins = 100, fill = "steelblue", alpha = 0.7) +
+  facet_wrap(~ tipo, scales = "free") +
+  scale_x_log10() +
+  theme_minimal() +
+  labs(title = "Distribución de centralidades (escala log)", x = "Valor (log)", y = "Frecuencia")
+```
+
+# Visualización de Centralidades
+
+Visualizar la importancia relativa de los nodos en la red usando dos medidas de centralidad:
+
+-  Grado: cuántas conexiones tiene un nodo (indicador de popularidad o conectividad).
+
+-  Intermediación (betweenness): cuántas veces un nodo actúa como puente en los caminos más cortos entre otros nodos (indicador de control o influencia).
+
+```{r}
+layout_fb <- layout_with_fr(fb)
+#Esta función normaliza cualquier vector de valores numéricos (como centralidades) al rango [10, 50].
+#controlar el tamaño de los nodos en la visualización, asegurando que no haya nodos invisibles ni excesivamente grandes.
+normalize <- function(x) 10 + 40 * (x - min(x)) / (max(x) - min(x))
+
+V(fb)$size <- normalize(degree(fb))
+V(fb)$color <- normalize(betweenness(fb))
+
+ggraph(fb, layout = layout_fb) +
+  geom_edge_link(alpha = 0.05) +
+  geom_node_point(aes(size = size, color = color)) +
+  scale_color_gradient(low = "lightblue", high = "darkblue") +
+  theme_void() +
+  ggtitle("Centralidades: tamaño ~ grado, color ~ intermediación")
+```
+
+-  Se calcula un layout de Fruchterman-Reingold, un algoritmo de diseño por fuerzas de atracción/repulsión, que da una distribución estética de los nodos en el espacio 2D.
+
+-  Este layout se reutiliza para asegurar consistencia en las distintas visualizaciones.
+
+-  Nodos grandes y oscuros: tienen alto grado y alta intermediación. Son altamente conectados y además actúan como puentes críticos en la red.
+
+-  Nodos grandes pero claros: bien conectados, pero no necesariamente influyentes como puente.
+
+-  Nodos pequeños y oscuros: poco conectados pero importantes en rutas entre otros nodos.
+
+-  Nodos pequeños y claros: periféricos, poco conectados y con baja influencia estructural.
+
+
+# PageRank
+
+**¿Qué se busca?**
+Visualizar la importancia global de los nodos basada en el algoritmo PageRank, usado originalmente por Google. Este considera no solo cuántas conexiones tiene un nodo, sino también la importancia de sus vecinos.
+
+```{r}
+pr_fb <- page_rank(fb)$vector
+V(fb)$size <- normalize(pr_fb)
+
+ggraph(fb, layout = layout_fb) +
+  geom_edge_link(alpha = 0.05) +
+  geom_node_point(aes(size = size), color = "tomato") +
+  theme_void() +
+  ggtitle("Visualización basada en PageRank")
+```
+
+-  A diferencia del grado o la intermediación, el PageRank favorece nodos que están conectados a otros nodos importantes.
+
+-  Por eso, puede destacar nodos que no tienen el mayor número de conexiones, pero están en posiciones estratégicas en la red.
+
+# Ego-networks (nodo 107)
+
+Una ego-network es la red formada por un nodo central ("ego") y todos los nodos directamente conectados a él ("alters"), incluyendo las conexiones entre los alters. Es útil para estudiar la posición local de un nodo y su entorno social inmediato
+
+```{r}
+ego_net <- make_ego_graph(fb, order = 1, nodes = 107)[[1]]
+ggraph(ego_net, layout = "fr") +
+  geom_edge_link(alpha = 0.3) +
+  geom_node_point(color = "skyblue", size = 4) +
+  theme_void() +
+  ggtitle("Ego-Red del nodo 107")
+edge_density(ego_net)
+
+```
+
+- Si el nodo 107 tiene grado alto, su ego-red será grande.
+
+- Podemos observar si sus vecinos están fuertemente conectados entre sí (alta densidad local) o si el nodo 107 actúa más como un puente entre nodos poco conectados.
+
+- También podríamos calcular la densidad de esta ego-red: Un valor cercano a 1 implica una red muy cohesionada (todos sus amigos son amigos entre sí).
+
+# Detección de comunidades (Louvain)
+
+El algoritmo de Louvain detecta comunidades maximizando la modularidad, que mide cuán densas son las conexiones dentro de comunidades comparado con conexiones entre comunidades.
+
+-  Nos permite ver si hay pocas comunidades grandes o muchas pequeñas, y estudiar la heterogeneidad de la estructura social.
+
+```{r}
+comunidad <- cluster_louvain(fb)
+V(fb)$community <- membership(comunidad)
+V(fb)$size <- normalize(betweenness(fb))
+
+ggraph(fb, layout = layout_fb) +
+  geom_edge_link(alpha = 0.03) +
+  geom_node_point(aes(color = as.factor(community), size = size)) +
+  theme_void() +
+  ggtitle("Comunidades detectadas (Louvain)")
+```
+
+-  La mayoría de las comunidades son pequeñas, pero hay algunas grandes.
+
+-  Este patrón suele seguir una distribución de ley de potencias, típica en redes reales.
+
+-  Las comunidades grandes pueden representar subredes de usuarios muy activos o con intereses comunes.
+
+# Distribución del tamaño de comunidades
+
+es importante analizar cuántas comunidades existen y cuál es el tamaño de cada una, es decir, cuántos nodos pertenecen a cada comunidad.
+
+```{r}
+
+com_sizes <- as.vector(sizes(comunidad))
+df_sizes <- data.frame(tamano = com_sizes)
+
+ggplot(df_sizes, aes(x = tamano)) +
+  geom_bar(fill = "darkgreen") +
+  theme_minimal() +
+  labs(title = "Distribución de tamaños de comunidades", x = "Tamaño", y = "Frecuencia")
+ggplot(df_sizes, aes(x = tamano)) +
+  geom_bar(fill = "darkgreen") +
+  scale_x_log10() +
+  theme_minimal() +
+  labs(title = "Distribución logarítmica del tamaño de comunidades",
+       x = "Tamaño (log10)", y = "Frecuencia")
+
+```
+
+El gráfico muestra la distribución de tamaños de todas las comunidades encontradas por el algoritmo Louvain. Generalmente, en redes sociales reales como esta, se observa:
+
+-  Muchas comunidades pequeñas (picos en la izquierda del gráfico).
+
+-  Pocas comunidades grandes, que agrupan a una gran parte de los nodos.
+
+Esto refleja una estructura jerárquica y heterogénea típica de redes sociales reales, donde hay una mezcla de:
+
+Grupos pequeños y cohesivos (amigos cercanos, subgrupos locales).
+
+Grupos grandes que podrían representar componentes más globales o populares dentro de la red.
+
+# Comparación de ego-redes
+
+**¿Qué se compara?**
+
+Podemos comparar la ego-red del nodo 107 con la de otros nodos, evaluando:
+
+- Tamaño
+
+- Densidad
+
+- Cohesión
+
+- Posición en la red global (¿están en la misma comunidad o diferentes?)
+
+```{r}
+# Comparar con otro nodo (ej. nodo 48)
+ego_net_48 <- make_ego_graph(fb, order = 1, nodes = 48)[[1]]
+
+# Comparar tamaños
+vcount(ego_net); vcount(ego_net_48)
+
+# Comparar densidades
+edge_density(ego_net)
+edge_density(ego_net_48)
+
+# ¿Están en la misma comunidad?
+membership(comunidad)["107"]
+membership(comunidad)["48"]
+
+
+```
+El diámetro puede dar NA si la ego-red no es conexa (es decir, no todos los nodos están alcanzables entre sí).
+Esto pasa mucho en ego-redes grandes donde algunos nodos están aislados del resto de la red del ego.
+
+
+
+
+```{r}
+ego_ids <- c(107, 48, 414)
+par(mfrow = c(1, 3))
+for (id in ego_ids) {
+  ego_g <- make_ego_graph(fb, order = 1, nodes = id)[[1]]
+  plot(ego_g, vertex.size = 3, vertex.label = NA, edge.color = "gray70", main = paste("Ego-red del nodo", id), layout = layout_with_fr(ego_g))
+}
+par(mfrow = c(1, 1))
+```
+
+En la comparación de ego-redes entre el nodo 107 y el nodo 48, se observa que el nodo 48 tiene una red personal mucho más amplia (48 nodos) en comparación con el nodo 107 (9 nodos). Sin embargo, la densidad de conexiones (medida como transitividad global) es mayor en el nodo 107, lo cual sugiere que sus conexiones son más cohesivas.
+
+# Conclusiones
+
+- La red presenta propiedades de redes reales: pocos hubs y muchos nodos de bajo grado.
+- PageRank y la centralidad de intermediación detectan distintos tipos de importancia.
+- El nodo 107 tiene una ego-red extensa y es altamente central.
+- La detección de comunidades revela estructuras modulares claras.
+
+# ¿Qué tipo de red es?
+
+La red es no dirigida (las amistades son mutuas) y no ponderada (todas las conexiones tienen igual peso). Es una red social de tipo "amistad", donde cada nodo representa un usuario y cada arista una relación de amistad en Facebook.
+
+```{r}
+fb  # objeto tipo 'igraph'
+is.directed(fb)
+is.weighted(fb)
+
+```
+
+#  ¿Quién es el miembro más conectado o influyente?
+
+Podemos definir "más conectado" como el nodo con mayor grado (número de conexiones) y "más influyente" como el que tiene mayor intermediación (aparece en muchos caminos entre nodos).
+
+```{r}
+# Nodo con mayor grado
+max_deg_node <- which.max(degree(fb))
+max_deg <- degree(fb)[max_deg_node]
+
+# Nodo con mayor intermediación
+max_bet_node <- which.max(betweenness(fb))
+max_bet <- betweenness(fb)[max_bet_node]
+
+max_deg_node; max_deg
+max_bet_node; max_bet
+
+```
+-  El nodo con mayor grado puede tener más de 1000 conexiones.
+
+-  El nodo con mayor intermediación conecta a muchas comunidades, actuando como un "puente" clave.
+
+#  ¿Quién tiene mayor cercanía al resto?
+
+El nodo con mayor centralidad de cercanía es el que, en promedio, está a menor distancia del resto de nodos.
+
+```{r}
+# Nodo más cercano en promedio
+closeness_vals <- closeness(fb, normalized = TRUE)
+max_close_node <- which.max(closeness_vals)
+max_close_node
+
+```
+Ese nodo puede enviar o recibir información muy eficientemente, siendo un buen difusor.
+
+#  ¿Qué nodos son más accesibles desde el resto de la red?
+
+Esto lo mide el PageRank: un nodo es accesible si muchos otros importantes apuntan a él (o están conectados con él).
+
+```{r}
+pagerank_vals <- page_rank(fb)$vector
+top_pr_node <- which.max(pagerank_vals)
+top_pr_node
+
+```
+El nodo con mayor PageRank es altamente accesible por estar conectado a usuarios importantes. No siempre es el más conectado.
+
+#  ¿Existen comunidades y cuáles son las más densas?
+
+Sí, existen muchas comunidades. Podemos detectarlas con el algoritmo de Louvain y medir su densidad con el número de conexiones internas.
+
+```{r}
+# Detección de comunidades con Louvain
+louvain <- cluster_louvain(fb)
+
+# Número de comunidades
+length(unique(membership(louvain)))
+
+# Tamaño de cada comunidad
+sizes(louvain)
+
+# Comunidad más densa (por promedio de grado interno)
+densidades <- sapply(seq_along(louvain), function(i) {
+  subg <- induced_subgraph(fb, which(membership(louvain) == i))
+  edge_density(subg)
+})
+which.max(densidades)
+
+```
+
+-  Hay decenas de comunidades.
+
+-  Algunas muy grandes, otras pequeñas pero densas.
+
+-  La comunidad más densa tiene muchas conexiones entre sus miembros, probablemente un grupo muy cohesionado (por ejemplo, estudiantes del mismo curso).
+
+#  ¿Hay superposición entre comunidades?
+
+No directamente, ya que Louvain asigna una única comunidad por nodo.
+
+Pero en la práctica, ciertos nodos (por ejemplo, con alta intermediación) conectan distintas comunidades, funcionando como puentes o "brokers".
+
+```{r}
+# Nodos con conexiones a distintas comunidades
+membership_vec <- membership(louvain)
+
+# Para cada nodo, número de comunidades distintas entre sus vecinos
+bridge_score <- sapply(V(fb), function(v) {
+  vecinos <- neighbors(fb, v)
+  length(unique(membership_vec[vecinos]))
+})
+
+# Nodos que conectan más comunidades
+which.max(bridge_score)
+
+```
+Este  nodo no "pertenecen a múltiples comunidades", pero actúa como conector entre ellas.
+
+Importantes para difusión de información entre grupos disjuntos.
+
+
+# conclusion 
+
+El análisis realizado sobre la red social de Facebook nos ha permitido comprender la estructura y dinámica interna de una red social real, utilizando herramientas del análisis de grafos. A través de la exploración de las conexiones entre usuarios, hemos observado que se trata de una red no dirigida, no ponderada, y de tipo escala libre, caracterizada por una distribución sesgada del grado, donde pocos nodos concentran una gran cantidad de conexiones, mientras que la mayoría tiene un número reducido.
+
+Mediante el cálculo de métricas de centralidad, identificamos los nodos más conectados (centralidad de grado), estratégicos (intermediación) y cercanos al resto de la red (cercanía y eigenvector). También destacamos la importancia de algunas personas en la red mediante PageRank, permitiendo identificar influenciadores que no necesariamente tienen el mayor grado, pero que están bien posicionados dentro de la estructura.
+
+La visualización de ego-redes mostró cómo varía la cohesión local dependiendo del nodo analizado: algunas redes personales eran densamente conectadas (alta transitividad) mientras que otras mostraban una estructura más dispersa. En particular, la comparación entre la ego-red del nodo 107 y la del nodo 48 evidenció diferencias en tamaño, cohesión y conectividad interna.
+
+Además, mediante el uso del algoritmo de Louvain, detectamos comunidades bien definidas dentro de la red, lo cual refuerza la idea de que los usuarios tienden a agruparse en clusters locales. La distribución del tamaño de comunidades mostró que existen muchas comunidades pequeñas y unas pocas grandes, lo cual es típico en redes sociales. Aunque no analizamos directamente la superposición entre comunidades, esta podría explorarse con métodos más avanzados, como detección de comunidades solapadas o fuzzy clustering.
+
+En conjunto, este trabajo ilustra cómo el análisis de redes permite no solo visualizar, sino cuantificar la estructura relacional en redes sociales, brindando herramientas útiles para entender la dinámica de interacción entre individuos y el papel que juegan dentro de la red global. Esta metodología puede extenderse a otros tipos de redes, como redes biológicas, de transporte o de información, para descubrir patrones subyacentes y nodos clave.
+
+
+
+
+
