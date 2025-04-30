@@ -1,0 +1,517 @@
+
+---
+title: "Cap.12 María Guadalupe Gómez Arzola"
+author: "María Guadalupe Gómez Arzola"
+date: "2025-04-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Introducción
+Estudiar el funcionamiento interno del Senado de EE.UU. ha sido un reto por la falta de datos accesibles. Sin embargo, con la llegada de bases de datos digitales, ahora es posible analizar la cooperación legislativa a través de los copatrocinios de proyectos de ley. Este estudio se enfoca en el 111º Congreso (2009–2010) y utiliza análisis de redes para explorar las relaciones de colaboración entre senadores.
+
+
+# Instalar y cargar los paquetes necesarios
+```{r}
+# Instalar y cargar los paquetes necesarios para el análisis
+packages <- c("httr",    # Para hacer solicitudes HTTP (acceso a APIs)
+              "xml2",    # Para leer y procesar archivos XML
+              "dplyr",   # Para manipular y transformar datos
+              "stringr", # Para trabajar con texto de manera eficiente
+              "igraph",  # Para crear y analizar redes (grafos)
+              "purrr")   # Para programación funcional y manejo de listas
+
+# Verificar cuáles paquetes no están instalados
+installed <- packages %in% installed.packages()
+
+# Instalar los que faltan
+if(any(!installed)) install.packages(packages[!installed])
+
+# Cargar todos los paquetes necesarios
+lapply(packages, library, character.only = TRUE)
+```
+
+# Función para generar la URL del XML del proyecto de ley
+Este fragmento de código define una función llamada generate_url que recibe como argumento el número de un proyecto de ley (id) y construye la URL correspondiente al archivo XML de ese proyecto en el sitio web del Congreso de EE.UU. para el 111º Congreso. La URL generada permite acceder directamente al contenido legislativo en formato estructurado.
+```{r}
+generate_url <- function(id) {
+  paste0("https://www.congress.gov/111/bills/s", id, "/BILLS-111s", id, "is.xml")
+}
+```
+
+# Función para limpiar nombres
+sta función llamada clean_names se utiliza para limpiar cadenas de texto (como nombres de senadores). Primero elimina espacios en blanco al inicio y al final de cada nombre usando str_trim(). Luego, remueve saltos de línea (\n) y tabulaciones (\t) con str_replace_all(). El resultado es un vector de nombres con formato más limpio y uniforme.
+```{r}
+clean_names <- function(names) {
+  names <- str_trim(names)
+  names <- str_replace_all(names, "\n|\t", "")
+  return(names)
+}
+```
+
+# Inicializar listas y procesar XMLs válidos
+```{r}
+# Inicializar lista vacía para almacenar los patrocinadores y copatrocinadores
+sponsor_list <- list()
+
+# Iterar sobre los primeros 3 proyectos de ley
+for(i in 10:13){
+  # Generar la URL correspondiente al proyecto de ley
+  url <- generate_url(i)
+  
+  # Intentar descargar y procesar el archivo XML
+  tryCatch({
+    # Leer el archivo XML desde la URL
+    xml_data <- suppressWarnings(suppressMessages(read_xml(url)))
+    
+    # Extraer el nombre del patrocinador principal
+    sponsor <- xml_find_first(xml_data, ".//sponsor") %>% xml_text(trim = TRUE)
+    # Extraer los nombres de los copatrocinadores
+    cosponsors <- xml_find_all(xml_data, ".//cosponsor") %>% xml_text(trim = TRUE)
+    
+    # Limpiar los nombres del patrocinador y copatrocinadores
+    sponsor <- clean_names(sponsor)
+    cosponsors <- clean_names(cosponsors)
+    
+    # Almacenar la información en la lista sponsor_list
+    sponsor_list[[paste0("S.", i)]] <- list(sponsor = sponsor, cosponsors = cosponsors)
+    
+    # Imprimir mensaje de éxito
+    cat("Ley: S", i, " | Patrocinador: ", sponsor, "\n")
+    
+  }, error = function(e) {
+    # En caso de error (por ejemplo, si no se encuentra el archivo XML), no hacer nada
+  })
+}
+
+
+```
+
+# Imprimir el número total de proyectos procesados
+```{r}
+cat("Número total de proyectos procesados: ", length(sponsor_list), "\n")
+```
+
+# Crear vector único de senadores
+```{r}
+# Crear vector único de senadores
+all_senators <- unique(unlist(lapply(sponsor_list, function(x) c(x$sponsor, x$cosponsors))))
+# Explicación:
+# lapply(sponsor_list, function(x) c(x$sponsor, x$cosponsors)): Aplica una función a cada elemento de la lista sponsor_list.
+#   La función extrae el nombre del patrocinador principal (x$sponsor) y los nombres de los copatrocinadores (x$cosponsors),
+#   y los combina en un solo vector utilizando c().
+# unlist(): Convierte la lista resultante de lapply() en un vector plano, es decir, una secuencia de nombres de senadores.
+# unique(): Elimina los nombres duplicados para crear un conjunto único de senadores.
+
+all_senators <- sort(all_senators)
+# Explicación:
+# sort(): Ordena alfabéticamente el vector de senadores de manera ascendente para facilitar su análisis posterior.
+
+```
+
+# Imprimir la lista de senadores
+```{r}
+cat("Lista completa de senadores involucrados:\n")
+print(all_senators)
+```
+
+# Crear matriz de participación
+La matriz resultante (sponsor_matrix) tiene como filas los proyectos de ley y como columnas los senadores. Las celdas de la matriz indican el rol de cada senador en cada proyecto de ley: si un senador es el patrocinador, se asigna "Sponsor", y si es un copatrocinador, se asigna "Cosponsor". Si un senador no está asociado con un proyecto de ley, la celda permanece como NA.
+```{r}
+sponsor_matrix <- matrix(NA, nrow = length(sponsor_list), ncol = length(all_senators))
+colnames(sponsor_matrix) <- all_senators
+rownames(sponsor_matrix) <- names(sponsor_list)
+
+for(i in seq_along(sponsor_list)) {
+  entry <- sponsor_list[[i]]
+  sponsor_matrix[i, which(colnames(sponsor_matrix) == entry$sponsor)] <- "Sponsor"
+  sponsor_matrix[i, colnames(sponsor_matrix) %in% entry$cosponsors] <- "Cosponsor"
+}
+```
+
+# Imprimir la matriz de patrocinadores y copatrocinadores
+```{r}
+cat("Matriz de participación:\n")
+print(sponsor_matrix)
+```
+
+# Crear lista de aristas (edges)
+El resultado es un data.frame de aristas que contiene las conexiones entre los senadores en función de los proyectos de ley en los que han colaborado. Cada fila de este data.frame tiene dos columnas: from (el senador que inicia la relación) y to (el senador con quien tiene la relación de patrocinio o copatrocinio). Este data.frame puede utilizarse para crear un grafo de las colaboraciones legislativas entre senadores.
+```{r}
+edges <- purrr::map_df(names(sponsor_list), function(bill) {
+  entry <- sponsor_list[[bill]]
+  actors <- unique(c(entry$sponsor, entry$cosponsors))
+  
+  if (length(actors) > 1) {
+    expand.grid(from = actors, to = actors, stringsAsFactors = FALSE) %>%
+      dplyr::filter(from != to) %>%
+      dplyr::rowwise() %>%
+      dplyr::mutate(pair = paste(sort(c(from, to)), collapse = "_")) %>%
+      dplyr::distinct(pair, .keep_all = TRUE) %>%
+      dplyr::select(from, to)
+  } else {
+    data.frame(from = character(0), to = character(0))
+  }
+})
+```
+
+# Imprimir las primeras filas de las aristas
+```{r}
+cat("Primeras filas de las aristas (edges):\n")
+print(head(edges))
+```
+
+# Crear grafo
+Se crea un grafo no dirigido que representa las relaciones de patrocinio y copatrocinio entre los senadores. El número total de componentes conectados indica cuántos grupos de senadores existen en el grafo donde todos los miembros dentro de cada grupo están conectados entre sí, aunque no necesariamente con otros grupos. El número de componentes conectados también se imprime en la consola para que puedas saber cuántos grupos de colaboración existen.
+```{r}
+g <- igraph::graph_from_data_frame(edges, directed = FALSE)
+components_info <- igraph::components(g)
+V(g)$component <- components_info$membership
+cat("Número de componentes conectados:", components_info$no, "\n")
+```
+
+# Imprimir información de componentes
+```{r}
+cat("Componentes conectados:\n")
+print(components_info$membership)
+```
+
+# Detectar comunidades con Louvain
+Detectará las comunidades dentro del grafo de relaciones entre los senadores usando el algoritmo de Louvain. Después de ejecutar este código, cada senador tendrá una comunidad asignada, y se imprimirá en la consola el número total de comunidades detectadas en el grafo. Las comunidades son subconjuntos de senadores que están más fuertemente conectados entre sí, lo que podría indicar grupos de trabajo, afinidades políticas o colaboraciones recurrentes.
+```{r}
+communities <- igraph::cluster_louvain(g)
+V(g)$community <- communities$membership
+cat("Comunidades detectadas:", length(unique(communities$membership)), "\n")
+```
+
+# Calcular centralidad de grado
+La centralidad de grado es una métrica sencilla pero importante en teoría de redes. En el contexto de tu grafo, podría interpretarse como una medida de la importancia o visibilidad de un senador en términos de cuántos otros senadores están conectados con él o ella (a través de proyectos de ley patrocinados o copatrocinados).
+
+Un senador con un alto grado (es decir, con muchas conexiones) podría ser visto como una figura influyente dentro del Senado, ya que tiene muchas relaciones de colaboración con otros senadores.
+
+Este cálculo es una forma de analizar la influencia de los senadores en la red de copatrocinios de proyectos de ley.
+```{r}
+deg <- igraph::degree(g, mode = "all")
+```
+
+# Imprimir centralidad de grado
+Después de calcular la centralidad de grado, esta sección del código imprime los resultados en la consola. Verás el valor de la centralidad de grado para cada senador (nodo). Si un senador tiene un grado alto, significa que tiene muchas conexiones con otros senadores (es un senador influyente en cuanto a colaboración en proyectos de ley).
+
+El propósito de imprimir estos resultados es visualizar la centralidad de grado de manera que se pueda analizar cuál es el nivel de conexión de cada senador dentro de la red. Esto puede ser útil para identificar a los senadores más influyentes o con más colaboraciones en el Senado.
+```{r}
+cat("Centralidad de grado:\n")
+print(deg)
+```
+
+# Estilo visual
+```{r}
+color_palette <- colorRampPalette(c("lightblue", "darkblue"))
+vertex_colors <- color_palette(max(deg) + 1)[deg + 1]
+vertex_sizes <- 3 + (deg * 0.7)
+```
+
+# Visualización de la red
+El análisis de la gráfica te permitirá no solo identificar los senadores más influyentes en términos de copatrocinios, sino también entender cómo se agrupan, cómo se colaboran entre sí, y si hay tendencias en las relaciones de colaboración dentro de la red legislativa. Las comunidades, la centralidad y las conexiones directas son aspectos fundamentales que reflejan el comportamiento y las dinámicas de trabajo en el Senado.
+```{r}
+set.seed(42)
+plot(g,
+     vertex.size = vertex_sizes,
+     vertex.label.cex = 0.5,
+     vertex.label.color = "black",
+     vertex.color = vertex_colors,
+     edge.color = "gray80",
+     main = "Red de Patrocinadores y Copatrocinadores (S.10–S.13)")
+```
+
+# Imprimir primeros elementos de la lista
+```{r}
+cat("Primeros elementos de la lista de patrocinadores:\n")
+print(head(sponsor_list, 5))
+```
+
+# Imprimir la matriz final de patrocinadores
+```{r}
+cat("Matriz de patrocinadores:\n")
+print(sponsor_matrix)
+```
+# Inicializar listas y procesar XMLs válidos
+```{r}
+sponsor_list <- list()
+
+for(i in 1:500){
+  url <- generate_url(i)
+  
+  tryCatch({
+    xml_data <- suppressWarnings(suppressMessages(read_xml(url)))
+    sponsor <- xml_find_first(xml_data, ".//sponsor") %>% xml_text(trim = TRUE)
+    cosponsors <- xml_find_all(xml_data, ".//cosponsor") %>% xml_text(trim = TRUE)
+    sponsor <- clean_names(sponsor)
+    cosponsors <- clean_names(cosponsors)
+    
+    sponsor_list[[paste0("S.", i)]] <- list(sponsor = sponsor, cosponsors = cosponsors)
+    cat("Ley: S", i, " | Patrocinador: ", sponsor, "\n")
+    
+  }, error = function(e) {
+  })
+}
+
+
+```
+
+# Imprimir el número total de proyectos procesados
+```{r}
+cat("Número total de proyectos procesados: ", length(sponsor_list), "\n")
+```
+
+# Crear vector único de senadores
+```{r}
+all_senators <- unique(unlist(lapply(sponsor_list, function(x) c(x$sponsor, x$cosponsors))))
+all_senators <- sort(all_senators)
+```
+
+# Imprimir la lista de senadores
+```{r}
+cat("Lista completa de senadores involucrados:\n")
+print(all_senators)
+```
+
+# Crear matriz de participación
+```{r}
+sponsor_matrix <- matrix(NA, nrow = length(sponsor_list), ncol = length(all_senators))
+colnames(sponsor_matrix) <- all_senators
+rownames(sponsor_matrix) <- names(sponsor_list)
+
+for(i in seq_along(sponsor_list)) {
+  entry <- sponsor_list[[i]]
+  sponsor_matrix[i, which(colnames(sponsor_matrix) == entry$sponsor)] <- "Sponsor"
+  sponsor_matrix[i, colnames(sponsor_matrix) %in% entry$cosponsors] <- "Cosponsor"
+}
+```
+
+# Imprimir la matriz de patrocinadores y copatrocinadores
+```{r}
+cat("Matriz de participación:\n")
+print(sponsor_matrix)
+```
+
+# Crear lista de aristas (edges)
+```{r}
+edges <- purrr::map_df(names(sponsor_list), function(bill) {
+  entry <- sponsor_list[[bill]]
+  actors <- unique(c(entry$sponsor, entry$cosponsors))
+  
+  if (length(actors) > 1) {
+    expand.grid(from = actors, to = actors, stringsAsFactors = FALSE) %>%
+      dplyr::filter(from != to) %>%
+      dplyr::rowwise() %>%
+      dplyr::mutate(pair = paste(sort(c(from, to)), collapse = "_")) %>%
+      dplyr::distinct(pair, .keep_all = TRUE) %>%
+      dplyr::select(from, to)
+  } else {
+    data.frame(from = character(0), to = character(0))
+  }
+})
+```
+
+
+# Detectar comunidades con Louvain
+```{r}
+communities <- igraph::cluster_louvain(g)
+V(g)$community <- communities$membership
+cat("Comunidades detectadas:", length(unique(communities$membership)), "\n")
+```
+
+# Calcular centralidad de grado
+```{r}
+deg <- igraph::degree(g, mode = "all")
+```
+
+# Imprimir centralidad de grado
+```{r}
+cat("Centralidad de grado:\n")
+print(deg)
+```
+
+
+# Imprimir las primeras filas de las aristas
+```{r}
+cat("Primeras filas de las aristas (edges):\n")
+print(head(edges))
+```
+
+# Crear grafo
+```{r}
+g <- igraph::graph_from_data_frame(edges, directed = FALSE)
+components_info <- igraph::components(g)
+V(g)$component <- components_info$membership
+cat("Número de componentes conectados:", components_info$no, "\n")
+```
+
+# Imprimir información de componentes
+```{r}
+cat("Componentes conectados:\n")
+print(components_info$membership)
+```
+
+# Estilo visual
+```{r}
+color_palette <- colorRampPalette(c("lightblue", "darkblue"))
+vertex_colors <- color_palette(max(deg) + 1)[deg + 1]
+vertex_sizes <- 3 + (deg * 0.7)
+```
+
+# Visualización de la red
+```{r}
+set.seed(42)
+plot(g,
+     vertex.size = vertex_sizes,
+     vertex.label.cex = 0.5,
+     vertex.label.color = "black",
+     vertex.color = vertex_colors,
+     edge.color = "gray80",
+     main = "Red de Patrocinadores y Copatrocinadores (S.1–S.500)")
+```
+
+# Imprimir primeros elementos de la lista
+```{r}
+cat("Primeros elementos de la lista de patrocinadores:\n")
+print(head(sponsor_list, 5))
+```
+
+# Imprimir la matriz final de patrocinadores
+```{r}
+cat("Matriz de patrocinadores:\n")
+print(sponsor_matrix)
+```
+
+
+# Inicializar listas y procesar XMLs válidos
+```{r}
+sponsor_list <- list()
+
+for(i in 1:3000){
+  url <- generate_url(i)
+  
+  tryCatch({
+    xml_data <- suppressWarnings(suppressMessages(read_xml(url)))
+    sponsor <- xml_find_first(xml_data, ".//sponsor") %>% xml_text(trim = TRUE)
+    cosponsors <- xml_find_all(xml_data, ".//cosponsor") %>% xml_text(trim = TRUE)
+    sponsor <- clean_names(sponsor)
+    cosponsors <- clean_names(cosponsors)
+    
+    sponsor_list[[paste0("S.", i)]] <- list(sponsor = sponsor, cosponsors = cosponsors)
+    cat("Ley: S", i, " | Patrocinador: ", sponsor, "\n")
+    
+  }, error = function(e) {
+  })
+}
+
+
+```
+
+
+# Imprimir el número total de proyectos procesados
+```{r}
+cat("Número total de proyectos procesados: ", length(sponsor_list), "\n")
+```
+
+# Crear vector único de senadores
+```{r}
+all_senators <- unique(unlist(lapply(sponsor_list, function(x) c(x$sponsor, x$cosponsors))))
+all_senators <- sort(all_senators)
+```
+
+# Imprimir la lista de senadores
+```{r}
+cat("Lista completa de senadores involucrados:\n")
+print(all_senators)
+```
+
+# Crear matriz de participación
+```{r}
+sponsor_matrix <- matrix(NA, nrow = length(sponsor_list), ncol = length(all_senators))
+colnames(sponsor_matrix) <- all_senators
+rownames(sponsor_matrix) <- names(sponsor_list)
+
+for(i in seq_along(sponsor_list)) {
+  entry <- sponsor_list[[i]]
+  sponsor_matrix[i, which(colnames(sponsor_matrix) == entry$sponsor)] <- "Sponsor"
+  sponsor_matrix[i, colnames(sponsor_matrix) %in% entry$cosponsors] <- "Cosponsor"
+}
+```
+
+# Imprimir la matriz de patrocinadores y copatrocinadores
+```{r}
+cat("Matriz de participación:\n")
+print(sponsor_matrix)
+```
+
+
+# Detectar comunidades con Louvain
+```{r}
+communities <- igraph::cluster_louvain(g)
+V(g)$community <- communities$membership
+cat("Comunidades detectadas:", length(unique(communities$membership)), "\n")
+```
+
+# Calcular centralidad de grado
+```{r}
+deg <- igraph::degree(g, mode = "all")
+```
+
+# Imprimir centralidad de grado
+```{r}
+cat("Centralidad de grado:\n")
+print(deg)
+```
+
+
+# Crear grafo
+```{r}
+g <- igraph::graph_from_data_frame(edges, directed = FALSE)
+components_info <- igraph::components(g)
+V(g)$component <- components_info$membership
+cat("Número de componentes conectados:", components_info$no, "\n")
+```
+
+# Imprimir información de componentes
+```{r}
+cat("Componentes conectados:\n")
+print(components_info$membership)
+```
+
+# Estilo visual
+```{r}
+color_palette <- colorRampPalette(c("lightblue", "darkblue"))
+vertex_colors <- color_palette(max(deg) + 1)[deg + 1]
+vertex_sizes <- 3 + (deg * 0.7)
+```
+
+# Visualización de la red
+```{r}
+set.seed(42)
+plot(g,
+     vertex.size = vertex_sizes,
+     vertex.label.cex = 0.5,
+     vertex.label.color = "black",
+     vertex.color = vertex_colors,
+     edge.color = "gray80",
+     main = "Red de Patrocinadores y Copatrocinadores (S.1–S.3000)")
+```
+
+# Imprimir primeros elementos de la lista
+```{r}
+cat("Primeros elementos de la lista de patrocinadores:\n")
+print(head(sponsor_list, 10))
+```
+
+# Imprimir la matriz final de patrocinadores
+```{r}
+cat("Matriz de patrocinadores:\n")
+print(sponsor_matrix)
+```
+
+
