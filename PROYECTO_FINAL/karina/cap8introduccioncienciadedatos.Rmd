@@ -77,7 +77,7 @@ Componentes conectados: Subconjuntos de nodos dentro de un grafo en los que todo
 
 Subgrafos: Son porciones de un grafo que incluyen solo un subconjunto de nodos y las aristas que los enlazan.
 
-Estos conceptos son fundamentales para estudiar redes en diversas disciplinas, como sociología, biología, informática y logística. Permiten modelar, analizar y optimizar sistemas de comunicación, transporte y organización.
+
 
 # Análisis de Redes Sociales
 
@@ -91,7 +91,7 @@ Red sin escala: En estas redes, la distribución de conexiones sigue una ley de 
 
 El estudio de estas redes permite comprender mejor sus patrones de comportamiento y su impacto en áreas como sociología, tecnología y comunicaciones.
 
-# Conceptos básicos en NetworkX
+#  la paqueteria 
 
 igraph es una caja de herramientas de R para la creación, manipulación y análisis de redes complejas. Permite estudiar la estructura, dinámica y funciones de los grafos de manera eficiente.
 
@@ -122,14 +122,12 @@ plot(g,
 
 
 ```
-# Caso práctico: Conjunto de datos de Facebook
+#  Caso práctico: Conjunto de datos de Facebook
 
 Para nuestro caso práctico, consideramos los datos de la red Facebook. En particular, utilizamos los datos de Círculos sociales: Facebook, provenientes de la colección Stanford Large Network Dataset (SNAP), que reúne diversas redes sociales, como Facebook, redes de citas, Twitter y comunidades abiertas como LiveJournal.
 
 El conjunto de datos de Facebook representa la amistad entre usuarios, donde los identificadores han sido anonimizados. La red se define como un grafo no dirigido y no ponderado, en el que los usuarios son los nodos y sus relaciones de amistad los bordes.
-
-El conjunto de datos está en un archivo de texto que contiene una lista de bordes, con un borde por línea. Ahora, en R, podemos cargar la red de Facebook y extraer información básica del gráfico, como el número de nodos, aristas y el grado promedio, con el siguiente código:
-
+ 
 
 #  Carga y estructura inicial del grafo
 
