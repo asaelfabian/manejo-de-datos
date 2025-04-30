@@ -20,9 +20,10 @@ comprensibles y accesibles.
 
 - Énfasis visual: El uso de texto en negrita, números grandes o colores contrastantes dirige la atención hacia los datos clave. 
 
--No hay una única respuesta correcta: El diseño de visualizaciones es como cocinar: hay muchas formas válidas de hacerlo bien. 
+- No hay una única respuesta correcta: El diseño de visualizaciones es como cocinar: hay muchas formas válidas de hacerlo bien. 
 Lo importante es que cada decisión esté justificada y sea coherente con el mensaje. 
 
 *Conclusión*
+
 El capítulo refuerza que un buen diseño no es accidental. Cada elemento visual debe cumplir una función específica y estar alineado con 
 la historia que se desea comunicar. La clave está en ser intencional en cada decisión de diseño para lograr visualizaciones claras, efectivas y memorables. 
